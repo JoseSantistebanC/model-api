@@ -91,9 +91,9 @@ model = GCN(in_channels=node_features.size(1), hidden_channels=16, out_channels=
 
 
 @app.get("/preferencias/")
-async def get_preferencias(skip: int = 0, limit: int = 10):
+async def get_preferencias():
     # Crear una consulta SQL para obtener todas las filas de la tabla preferencias
-    query =  f"SELECT * FROM preferencia OFFSET {skip} LIMIT {limit}"
+    query = "SELECT * FROM preferencia"
     
     # Ejecutar la consulta y cargar los resultados en un DataFrame de pandas
     df_preferencias = pd.read_sql(query, engine)
