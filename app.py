@@ -67,23 +67,18 @@ edge_index = torch.tensor(
     dtype=torch.long
 )
 
-
     # Crear atributos de los vértices (ratings)
 edge_attr = torch.tensor(df_preferencias['rating'].values, dtype=torch.float)
 
     # Crear PyTorch Geometric data object
 data = Data(edge_index=edge_index, edge_attr=edge_attr)
-
 num_usuarios = df_preferencias['id_usuario'].nunique()
 num_items = df_preferencias['id_evento'].nunique()
 num_nodos = num_usuarios + num_items
-
     # Crear características de los nodos
 node_features = torch.eye(num_nodos)
-
     # Agregar las características de los nodos
 data.x = node_features
-
     # Inicializar modelo
 model = GCN(in_channels=node_features.size(1), hidden_channels=16, out_channels=1)
 
@@ -125,6 +120,31 @@ async def get_recommendations(recommendations: Recommendations):
 
 @app.post("/recommend/")
 async def recommend(user: UserRecommendation): 
+    user_id = user_encoder.transform([user.user_id])[0]
+        # Obtener índices de productos con los que el usuario no interactuó aún
+    uninteracted_items = torch.tensor([i + num_usuarios for i in range(num_items) if i not in df_preferencias[df_preferencias['id_usuario'] == user_id]['id_evento'].values])
+
+    # Crear edge_index para user_data
+    user_edge_index = torch.tensor([[user_id] * len(uninteracted_items), uninteracted_items], dtype=torch.long)
+
+    # Crear data object de productos no interactuados
+    user_data = Data(edge_index=user_edge_index, x=node_features)
+   # Realizar la predicción
+    with torch.no_grad():
+        predictions = model(user_data)
+
+    # Ordenar predicciones de forma descendente
+    _, sorted_indices = torch.sort(predictions, descending=True)
+
+    # Obtener Top 10 recomendaciones
+    recommended_items = uninteracted_items[sorted_indices[:10]]
+    recommended_item_ids = recommended_items.tolist()
+    
+
+    return {"recommended_items": recommended_item_ids}
+
+@app.post("/recommendById/")
+async def recommend(user: UserRecommendation): 
     user_id = user.user_id
         # Obtener índices de productos con los que el usuario no interactuó aún
     uninteracted_items = torch.tensor([i + num_usuarios for i in range(num_items) if i not in df_preferencias[df_preferencias['id_usuario'] == user_id]['id_evento'].values])
@@ -144,5 +164,61 @@ async def recommend(user: UserRecommendation):
     # Obtener Top 10 recomendaciones
     recommended_items = uninteracted_items[sorted_indices[:10]]
     recommended_item_ids = recommended_items.tolist()
+    
 
-    return {"recommended_items": recommended_item_ids}
+    ids_str = ','.join(map(str, recommended_item_ids))
+
+    # Crear una consulta SQL para obtener los eventos recomendados
+    query = f"""
+    SELECT * 
+    FROM evento
+    WHERE id IN ({ids_str})
+    """
+
+    # Ejecutar la consulta y cargar los resultados en un DataFrame de pandas
+    df_eventos_recomendados = pd.read_sql(query, engine)
+
+    # Convertir el DataFrame a una lista de diccionarios
+    eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
+
+    return {"recommended_events": eventos_recomendados}
+
+@app.get("/recommendById/{user_id}")
+async def recommend(user_id: int): 
+    user_id_transformed = user_encoder.transform([user_id])[0]
+        # Obtener índices de productos con los que el usuario no interactuó aún
+    uninteracted_items = torch.tensor([i + num_usuarios for i in range(num_items) if i not in df_preferencias[df_preferencias['id_usuario'] == user_id]['id_evento'].values])
+
+    # Crear edge_index para user_data
+    user_edge_index = torch.tensor([[user_id] * len(uninteracted_items), uninteracted_items], dtype=torch.long)
+
+    # Crear data object de productos no interactuados
+    user_data = Data(edge_index=user_edge_index, x=node_features)
+   # Realizar la predicción
+    with torch.no_grad():
+        predictions = model(user_data)
+
+    # Ordenar predicciones de forma descendente
+    _, sorted_indices = torch.sort(predictions, descending=True)
+
+    # Obtener Top 10 recomendaciones
+    recommended_items = uninteracted_items[sorted_indices[:10]]
+    recommended_item_ids = recommended_items.tolist()
+    
+
+    ids_str = ','.join(map(str, recommended_item_ids))
+
+    # Crear una consulta SQL para obtener los eventos recomendados
+    query = f"""
+    SELECT * 
+    FROM evento
+    WHERE id IN ({ids_str})
+    """
+
+    # Ejecutar la consulta y cargar los resultados en un DataFrame de pandas
+    df_eventos_recomendados = pd.read_sql(query, engine)
+
+    # Convertir el DataFrame a una lista de diccionarios
+    eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
+
+    return {"recommended_events": eventos_recomendados}
