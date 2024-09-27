@@ -185,14 +185,35 @@ async def recommend(user: UserRecommendation):
 
 @app.get("/recommendById/{user_id}")
 async def recommend(user_id: int): 
+    # Transformar el user_id a su correspondiente índice interno
     user_id_transformed = user_encoder.transform([user_id])[0]
-        # Obtener índices de productos con los que el usuario no interactuó aún
+    # Obtener índices de eventos con los que el usuario no interactuó aún
     uninteracted_items = torch.tensor([i + num_usuarios for i in range(num_items) if i not in df_preferencias[df_preferencias['user_id'] == user_id]['event_id'].values])
+
+    #en caso no haya eventos no interactuados
+    if uninteracted_items.numel() == 0:
+        # Obtener 10 eventos aleatorios en caso de no haber eventos no interactuados
+        query_random_events = "SELECT id FROM evento ORDER BY RANDOM() LIMIT 10"
+        df_random_events = pd.read_sql(query_random_events, engine)
+        random_event_ids = df_random_events['id'].tolist()
+        ids_str = ','.join(map(str, random_event_ids))
+
+        query = f"""
+        SELECT * 
+        FROM evento
+        WHERE id IN ({ids_str})
+        """
+
+        df_eventos_recomendados = pd.read_sql(query, engine)
+        eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
+
+        return {"recommended_events": eventos_recomendados}
+
 
     # Crear edge_index para user_data
     user_edge_index = torch.tensor([[user_id] * len(uninteracted_items), uninteracted_items], dtype=torch.long)
 
-    # Crear data object de productos no interactuados
+    # Crear data object de eventos no interactuados
     user_data = Data(edge_index=user_edge_index, x=node_features)
    # Realizar la predicción
     with torch.no_grad():
@@ -205,6 +226,24 @@ async def recommend(user_id: int):
     recommended_items = uninteracted_items[sorted_indices[:10]]
     recommended_item_ids = recommended_items.tolist()
     
+   # Manejo de resultados vacíos
+    if len(recommended_item_ids) == 0:
+        # Obtener 10 eventos aleatorios en caso de no haber recomendaciones
+        query_random_events = "SELECT id FROM evento ORDER BY RANDOM() LIMIT 10"
+        df_random_events = pd.read_sql(query_random_events, engine)
+        random_event_ids = df_random_events['id'].tolist()
+        ids_str = ','.join(map(str, random_event_ids))
+
+        query = f"""
+        SELECT * 
+        FROM evento
+        WHERE id IN ({ids_str})
+        """
+
+        df_eventos_recomendados = pd.read_sql(query, engine)
+        eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
+
+        return {"recommended_events": eventos_recomendados}    
 
     ids_str = ','.join(map(str, recommended_item_ids))
 
