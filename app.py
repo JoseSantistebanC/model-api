@@ -217,12 +217,15 @@ async def recommend(user_id: int):
         ids_str = ','.join(map(str, random_event_ids))
 
         query = f"""
-        SELECT * 
-        FROM evento
-        WHERE id IN ({ids_str})
+        SELECT e.*, f.isfavorite, p.rating
+        FROM evento e
+        LEFT JOIN favorito f ON e.id = f.evento_id
+        LEFT JOIN preferencia p ON e.id = p.event_id
+        WHERE e.id IN ({ids_str})
         """
 
         df_eventos_recomendados = pd.read_sql(query, engine)
+        df_eventos_recomendados = df_eventos_recomendados.replace({pd.NA: None, np.nan: None})  # Reemplazar NaN con None
         eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
 
         return {"recommended_events": eventos_recomendados}
@@ -253,12 +256,15 @@ async def recommend(user_id: int):
         ids_str = ','.join(map(str, random_event_ids))
 
         query = f"""
-        SELECT * 
-        FROM evento
-        WHERE id IN ({ids_str})
+        SELECT e.*, f.isfavorite, p.rating
+        FROM evento e
+        LEFT JOIN favorito f ON e.id = f.evento_id
+        LEFT JOIN preferencia p ON e.id = p.event_id
+        WHERE e.id IN ({ids_str})
         """
 
         df_eventos_recomendados = pd.read_sql(query, engine)
+        df_eventos_recomendados = df_eventos_recomendados.replace({pd.NA: None, np.nan: None})  # Reemplazar NaN con None
         eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
 
         return {"recommended_events": eventos_recomendados}    
@@ -267,14 +273,16 @@ async def recommend(user_id: int):
 
     # Crear una consulta SQL para obtener los eventos recomendados
     query = f"""
-    SELECT * 
-    FROM evento
-    WHERE id IN ({ids_str})
+    SELECT e.*, f.isfavorite, p.rating
+    FROM evento e
+    LEFT JOIN favorito f ON e.id = f.evento_id
+    LEFT JOIN preferencia p ON e.id = p.event_id
+    WHERE e.id IN ({ids_str})
     """
 
     # Ejecutar la consulta y cargar los resultados en un DataFrame de pandas
     df_eventos_recomendados = pd.read_sql(query, engine)
-
+    df_eventos_recomendados = df_eventos_recomendados.replace({pd.NA: None, np.nan: None})  # Reemplazar NaN con None
     # Convertir el DataFrame a una lista de diccionarios
     eventos_recomendados = df_eventos_recomendados.to_dict(orient='records')
 
