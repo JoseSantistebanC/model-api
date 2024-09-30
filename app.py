@@ -221,7 +221,7 @@ async def recommend(user_id: int):
         FROM evento e
         LEFT JOIN favorito f ON e.id = f.evento_id
         LEFT JOIN preferencia p ON e.id = p.event_id
-        WHERE e.id IN ({ids_str})
+        WHERE e.id IN ({ids_str}) and e.archivado = false
         """
 
         df_eventos_recomendados = pd.read_sql(query, engine)
@@ -260,7 +260,7 @@ async def recommend(user_id: int):
         FROM evento e
         LEFT JOIN favorito f ON e.id = f.evento_id
         LEFT JOIN preferencia p ON e.id = p.event_id
-        WHERE e.id IN ({ids_str})
+        WHERE e.id IN ({ids_str}) and e.archivado = false
         """
 
         df_eventos_recomendados = pd.read_sql(query, engine)
@@ -277,7 +277,7 @@ async def recommend(user_id: int):
     FROM evento e
     LEFT JOIN favorito f ON e.id = f.evento_id
     LEFT JOIN preferencia p ON e.id = p.event_id
-    WHERE e.id IN ({ids_str})
+    WHERE e.id IN ({ids_str}) and e.archivado = false
     """
 
     # Ejecutar la consulta y cargar los resultados en un DataFrame de pandas
