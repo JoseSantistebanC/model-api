@@ -53,55 +53,6 @@ class Recommendations(BaseModel):
 class UserRecommendation(BaseModel):
     user_id: int
 
-#Modelo 
-class GCN(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        super(GCN, self).__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, hidden_channels)
-        self.fc = torch.nn.Linear(hidden_channels * 2, out_channels)
-
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index)
-        x = F.relu(x)
-
-        # Se aplica una capa lineal a las características de cada nodo
-        edge_pred = self.fc(torch.cat([x[edge_index[0]], x[edge_index[1]]], dim=1))
-        return edge_pred.squeeze()
-
-query_preferencias = 'SELECT * FROM preferencia'  
-df_preferencias = pd.read_sql(query_preferencias, engine)
-
-user_encoder = LabelEncoder()
-item_encoder = LabelEncoder()
-df_preferencias['user_id'] = user_encoder.fit_transform(df_preferencias['user_id'])
-df_preferencias['event_id'] = item_encoder.fit_transform(df_preferencias['event_id'])
-
-    #Creamos grafo
-    # Crear vértices de las interacciones usuario-producto
-edge_index = torch.tensor(
-    np.array([df_preferencias['user_id'].values, df_preferencias['event_id'].values]), 
-    dtype=torch.long
-)
-
-    # Crear atributos de los vértices (ratings)
-edge_attr = torch.tensor(df_preferencias['rating'].values, dtype=torch.float)
-
-    # Crear PyTorch Geometric data object
-data = Data(edge_index=edge_index, edge_attr=edge_attr)
-num_usuarios = df_preferencias['user_id'].nunique()
-num_items = df_preferencias['event_id'].nunique()
-num_nodos = num_usuarios + num_items
-    # Crear características de los nodos
-node_features = torch.eye(num_nodos)
-    # Agregar las características de los nodos
-data.x = node_features
-    # Inicializar modelo
-model = GCN(in_channels=node_features.size(1), hidden_channels=16, out_channels=1)
-
 
 
 
@@ -165,6 +116,7 @@ async def recommend(user: UserRecommendation):
 
 @app.post("/recommendById/")
 async def recommend(user: UserRecommendation): 
+
     user_id = user.user_id
         # Obtener índices de productos con los que el usuario no interactuó aún
     uninteracted_items = torch.tensor([i + num_usuarios for i in range(num_items) if i not in df_preferencias[df_preferencias['user_id'] == user_id]['event_id'].values])
@@ -205,6 +157,58 @@ async def recommend(user: UserRecommendation):
 
 @app.get("/recommendById/{user_id}")
 async def recommend(user_id: int): 
+    #Modelo 
+    class GCN(torch.nn.Module):
+        def __init__(self, in_channels, hidden_channels, out_channels):
+            super(GCN, self).__init__()
+            self.conv1 = GCNConv(in_channels, hidden_channels)
+            self.conv2 = GCNConv(hidden_channels, hidden_channels)
+            self.fc = torch.nn.Linear(hidden_channels * 2, out_channels)
+
+        def forward(self, data):
+            x, edge_index = data.x, data.edge_index
+            x = self.conv1(x, edge_index)
+            x = F.relu(x)
+            x = self.conv2(x, edge_index)
+            x = F.relu(x)
+
+            # Se aplica una capa lineal a las características de cada nodo
+            edge_pred = self.fc(torch.cat([x[edge_index[0]], x[edge_index[1]]], dim=1))
+            return edge_pred.squeeze()
+
+    query_preferencias = 'SELECT * FROM preferencia'  
+    df_preferencias = pd.read_sql(query_preferencias, engine)
+
+    user_encoder = LabelEncoder()
+    item_encoder = LabelEncoder()
+    df_preferencias['user_id'] = user_encoder.fit_transform(df_preferencias['user_id'])
+    df_preferencias['event_id'] = item_encoder.fit_transform(df_preferencias['event_id'])
+
+        #Creamos grafo
+        # Crear vértices de las interacciones usuario-producto
+    edge_index = torch.tensor(
+        np.array([df_preferencias['user_id'].values, df_preferencias['event_id'].values]), 
+        dtype=torch.long
+    )
+
+        # Crear atributos de los vértices (ratings)
+    edge_attr = torch.tensor(df_preferencias['rating'].values, dtype=torch.float)
+
+        # Crear PyTorch Geometric data object
+    data = Data(edge_index=edge_index, edge_attr=edge_attr)
+    num_usuarios = df_preferencias['user_id'].nunique()
+    num_items = df_preferencias['event_id'].nunique()
+    num_nodos = num_usuarios + num_items
+        # Crear características de los nodos
+    node_features = torch.eye(num_nodos)
+        # Agregar las características de los nodos
+    data.x = node_features
+        # Inicializar modelo
+    model = GCN(in_channels=node_features.size(1), hidden_channels=16, out_channels=1)
+
+
+    if user_id not in user_encoder.classes_:
+        return {"error": f"User ID {user_id} not found in encoder classes."}
     # Transformar el user_id a su correspondiente índice interno
     user_id_transformed = user_encoder.transform([user_id])[0]
     # Obtener índices de eventos con los que el usuario no interactuó aún
